@@ -261,8 +261,8 @@ down_cosmic(){
 		shift
 	done
 	
-	[ -z $genome ] 	&& echo "Add -g <genome>, like GRCh37" >&2 && return 1
-	[ -z $version ] && echo "Add -v <version>, like 90" >&2 && return 1
+	[ -z $genome ] 	&& echo "Add -g <genome>, like GRCh37 or GRCh38" >&2 && return 1
+	[ -z $version ] && echo "Add -v <version>, like 98 or 99" >&2 && return 1
 	[ -z $out_dir ] && echo "Add -o <out dir>" >&2 && return 1
 	new_mkdir $out_dir
 	cd $out_dir
@@ -316,7 +316,7 @@ get_COSMIC_canonical(){
 	done
 	
 	[ -z $genome ] 		&& echo "Add -g <genome>, e.g. GRCh37/GRCh38" >&2 && return 1
-	[ -z $version ] 	&& echo "Add -v <version>, e.g. 94/95" >&2 && return 1
+	[ -z $version ] 	&& echo "Add -v <version>, e.g. 94/95/99" >&2 && return 1
 	[ -z $hts_dir ] 	&& echo "Add -h <hts_dir>" >&2 && return 1
 	[ -z $cosm_dir ] 	&& echo "Add -c <COSMIC dir>" >&2 && return 1
 	
