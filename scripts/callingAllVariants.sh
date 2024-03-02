@@ -23,7 +23,9 @@ for repo in baSHic; do
 done
 
 for fn in genomic; do
-	. $git_dir/baSHic/scripts/$fn.sh
+	. $git_dir/somdna/scripts/$fn.sh
+	[ $? -eq 0 ] && continue
+	echo -e "Error src-ing $fn.sh" >&2 && return 1
 done
 
 run_strelka2_soma(){
