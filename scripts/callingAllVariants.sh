@@ -366,11 +366,18 @@ get_COSMIC_canonical(){
 run_VEP(){
 	local fasta_fn vep_dir genome status vep_rel cmd
 	local input_fn output_fn vep_fields cosmic_fn ncores
-	local vep_cache0 vep_cache vep_cache_dir
+	local cache_dir species cache_type type_dir genome_dir
+	local gnomad_fn
+	
+	local vep_cache0 vep_cache_dir
 	
 	ncores=1
 	while [ ! -z "$1" ]; do
 		case $1 in
+			-a | --gnomad_fn )
+				shift
+				gnomad_fn="$1"
+				;;
 			-c | --cosmic_fn )
 				shift
 				cosmic_fn="$1"
@@ -382,6 +389,10 @@ run_VEP(){
 			-g | --genome )
 				shift
 				genome="$1"
+				;;
+			-h | --cache_dir )
+				shift
+				cache_dir="$1"
 				;;
 			-i | --input_fn )
 				shift
@@ -399,26 +410,34 @@ run_VEP(){
 				shift
 				vep_rel="$1"
 				;;
+			-s | --species )
+				shift
+				species="$1"
+				;;
+			-t | --cache_type )
+				shift
+				cache_type="$1"
+				;;
 			-v | --vep_dir )
 				shift
 				vep_dir="$1"
-				;;
-			-a | --vep_cache )
-				shift
-				vep_cache="$1"
 				;;
 		esac
 		shift
 	done
 	
 	# Check inputs
-	[ -z $cosmic_fn ] && echo "Add -c <cosmic_fn>" >&2 && return 1
-	[ -z $fasta_fn ] 	&& echo "Add -f <fasta_fn>" >&2 && return 1
-	[ -z $genome ] 		&& echo "Add -g <genome, e.g. GRCh37>" >&2 && return 1
-	[ -z $input_fn ] 	&& echo "Add -i <input_fn>" >&2 && return 1
-	[ -z $output_fn ] && echo "Add -o <output_fn>" >&2 && return 1
-	[ -z $vep_dir ] 	&& echo "Add -v <vep_dir>" >&2 && return 1
-	[ -z $vep_rel ] 	&& echo "Add -r <vep release number>" >&2 && return 1
+	[ -z "$cosmic_fn" ] && echo "Add -c <cosmic_fn>" >&2 && return 1
+	[ -z "$gnomad_fn" ] && echo "Add -a <gnomad_fn>" >&2 && return 1
+	[ -z "$fasta_fn" ] 	&& echo "Add -f <fasta_fn>" >&2 && return 1
+	[ -z "$genome" ] 		&& echo "Add -g <genome, e.g. GRCh37>" >&2 && return 1
+	[ -z "$input_fn" ] 	&& echo "Add -i <input_fn>" >&2 && return 1
+	[ -z "$output_fn" ] && echo "Add -o <output_fn>" >&2 && return 1
+	[ -z "$vep_dir" ] 	&& echo "Add -v <vep_dir>" >&2 && return 1
+	[ -z "$vep_rel" ] 	&& echo "Add -r <vep release number, e.g 111>" >&2 && return 1
+	[ -z "$cache_dir" ] && echo "Add -h <cache_dir>" >&2 && return 1
+	[ -z "$species" ] 	&& species=homo_sapiens
+	[ -z "$cache_type" ] && echo "Add -t <cache_type, e.g. vep, refseq, merged>" >&2 && return 1
 	
 	# Check VEP installed
 	[ ! -f $vep_dir/vep ] && echo "Error: VEP missing" >&2 && return 1
@@ -426,26 +445,23 @@ run_VEP(){
 		&& echo "Error: VEP not installed or environment not setup" >&2 \
 		&& return 1
 	
-	if [ -z "$vep_cache" ]; then
-		make_menu -c ${yellow} -p "Which cache? Select a number:" \
-			-o "1) VEP" "2) RefSeq" "3) Merged = VEP + RefSeq"
-		read -t 10 vep_cache0
-		[ -z "$vep_cache0" ] && echo "Error: missing input" >&2 && return 1
-		check_array $vep_cache0 1 2 3
-		[ ! $? -eq 0 ] && echo "Error: not a valid cache option" >&2 && return 1
-		[ $vep_cache0 -eq 1 ] && vep_cache="vep"
-		[ $vep_cache0 -eq 2 ] && vep_cache="refseq"
-		[ $vep_cache0 -eq 3 ] && vep_cache="merged"
-	fi
-	check_array $vep_cache vep refseq merged
-	[ ! $? -eq 0 ] && echo "Error: Not a valid cache" >&2 && return 1
+	# Check files
+	[ ! -f "$gnomad_fn" ] && echo -e "$gnomad_fn missing" >&2 && return 1
+	[ ! -f "$cosmic_fn" ] && echo -e "$cosmic_fn missing" >&2 && return 1
 	
-	# Check cache+release+db exists
-	vep_cache_dir=$vep_dir/homo_sapiens
-	[ "$vep_cache" != "vep" ] && vep_cache_dir="${vep_cache_dir}_${vep_cache}"
-	[ ! -d $vep_cache_dir ] && echo "Error: VEP cache species missing" >&2 && return 1
-	[ ! $(ls $vep_cache_dir | grep "^${vep_rel}_${genome}$" | wc -l) -eq 1 ] \
-		&& echo -e "Error: ${vep_rel}_${genome} missing" >&2 && return 1
+	# Check cache_dir
+	[ ! -d "$cache_dir" ] && echo -e "$cache_dir missing" >&2 && return 1
+	
+	# Check cache_type and dir
+	check_array "$cache_type" vep refseq merged
+	[ ! $? -eq 0 ] && echo "cache_type should be vep, refseq, or merged" >&2 && return 1
+	[ "$cache_type" == "vep" ] && type_dir="$cache_dir/$species"
+	[ "$cache_type" != "vep" ] && type_dir="$cache_dir/${species}_${cache_type}"
+	[ ! -d "$type_dir" ] && echo -e "$type_dir missing" >&2 && return 1
+	
+	# Check type_dir's genome
+	genome_dir=$type_dir/${vep_rel}_${genome}
+	[ ! -d "$genome_dir" ] && echo -e "$genome_dir missing" >&2 && return 1
 	
 	# If output file exists, done
 	[ -f $output_fn.gz ] && echo -e "$(date): Final VEP output already exists" >&2 && return 0
@@ -457,14 +473,16 @@ run_VEP(){
 	vep_fields="$vep_fields,gnomAD_AF,COSMIC,COSMIC_CNT"
 	vep_fields="$vep_fields,COSMIC_LEGACY_ID"
 	
+	echo "Editing code here" >&2 && return 1
+	
 	export OMP_NUM_THREADS=$ncores
-	cmd="$vep_dir/vep --format vcf --species homo_sapiens"
+	cmd="$vep_dir/vep --format vcf --species $species"
 	cmd="$cmd -i $input_fn -o $output_fn --fork $ncores"
-	cmd="$cmd --cache --dir_cache $vep_dir --cache_version $vep_rel"
-	[ "$vep_cache" != "vep" ] && cmd="$cmd --$vep_cache"
+	cmd="$cmd --cache --dir_cache $cache_dir --cache_version $vep_rel"
+	[ "$cache_type" != "vep" ] && cmd="$cmd --$cache_type"
 	cmd="$cmd --assembly $genome --fasta $fasta_fn --force_overwrite"
 	cmd="$cmd --no_stats --domains --hgvs --af --af_gnomad --vcf"
-	cmd="$cmd --custom $cosmic_fn,COSMIC,vcf,exact,0,CNT,LEGACY_ID"
+	cmd="$cmd --custom file=$cosmic_fn,short_name=COSMIC,format=vcf,type=exact,coords=0,fields=CNT%LEGACY_ID"
 	cmd="$cmd --fields \"$vep_fields\""
 	eval $cmd >&2
 	status=$?
