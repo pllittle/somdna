@@ -79,21 +79,21 @@ run_strelka2_soma(){
 	done
 	
 	# Check inputs
-	[ -z $strelka_dir ] && echo "Add -s <Strelka2 dir>" >&2 && return 1
-	[ -z $gatk_dir ] 		&& echo "Add -g <GATK dir>" >&2 && return 1
-	[ -z $tbam ] 				&& echo "Add -t <tumor bam>" >&2 && return 1
-	[ -z $nbam ] 				&& echo "Add -n <normal bam>" >&2 && return 1
-	[ -z $ref ] 				&& echo "Add -r <reference genome>" >&2 && return 1
-	[ -z $out_dir ] 		&& echo "Add -o <output dir>" >&2 && return 1
-	[ -z $ncores ] 			&& echo "Add -c <number of threads/cores>" >&2 && return 1
+	[ -z "$strelka_dir" ] && echo "Add -s <Strelka2 dir>" >&2 && return 1
+	[ -z "$gatk_dir" ] 		&& echo "Add -g <GATK dir>" >&2 && return 1
+	[ -z "$tbam" ] 				&& echo "Add -t <tumor bam>" >&2 && return 1
+	[ -z "$nbam" ] 				&& echo "Add -n <normal bam>" >&2 && return 1
+	[ -z "$ref" ] 				&& echo "Add -r <reference genome>" >&2 && return 1
+	[ -z "$out_dir" ] 		&& echo "Add -o <output dir>" >&2 && return 1
+	[ -z "$ncores" ] 			&& echo "Add -c <number of threads/cores>" >&2 && return 1
 	
 	[ ! $($strelka_dir/bin/configureStrelkaSomaticWorkflow.py -h > /dev/null; echo $?) -eq 0 ] \
 		&& echo "Error: Strelka2 not properly installed or environment isn't setup yet" >&2 \
 		&& return 1
 	
-	new_mkdir $out_dir
-	var_dir=$out_dir/results/variants
-	[ -s $out_dir/somatic.vcf.gz ] && return 0
+	new_mkdir "$out_dir"
+	var_dir="$out_dir/results/variants"
+	[ -s "$out_dir/somatic.vcf.gz" ] && return 0
 	
 	# Prepare regions
 	[ ! -z "$regions" ] \
@@ -325,10 +325,14 @@ get_COSMIC_canonical(){
 	# down_cosmic -g $genome -v $version -o $cosm_dir
 	cosmic_fn=$cosm_dir/CosmicCodingMuts_${genome}_v${version}
 	
-	if [ ! -f $hts_dir/bin/bgzip ] \
-		|| [ ! -f $hts_dir/bin/tabix ]; then
-		echo "Install htslib!" >&2 && return 1
-	fi
+	# Check dependencies
+	for fn in bgzip tabix htsfile; do
+			[ ! -f "$hts_dir/bin/$fn" ] \
+				&& echo "Install htslib" >&2 && return 1
+			$hts_dir/bin/$fn --help > /dev/null
+			[ $? -eq 0 ] && continue
+			echo "Load htslib and dependencies" >&2 && return 1
+	done
 	
 	if [ ! -f ${cosmic_fn}_canonical.vcf.gz ] \
 		|| [ ! -f ${cosmic_fn}_canonical.vcf.gz.tbi ]; then
