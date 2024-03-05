@@ -473,7 +473,7 @@ run_VEP(){
 	vep_fields="$vep_fields,gnomAD_AF"
 	vep_fields="$vep_fields,COSMIC,COSMIC_CNT,COSMIC_LEGACY_ID"
 	
-	echo "Editing code here" >&2 && return 1
+	# echo "Editing code here" >&2 && return 1
 	
 	export OMP_NUM_THREADS=$ncores
 	cmd="$vep_dir/vep --format vcf --species $species"
