@@ -470,8 +470,8 @@ run_VEP(){
 	
 	# Run VEP
 	vep_fields=IMPACT,Consequence,SYMBOL,HGVSc,HGVSp,AF
-	vep_fields="$vep_fields,gnomAD_AF,COSMIC,COSMIC_CNT"
-	vep_fields="$vep_fields,COSMIC_LEGACY_ID"
+	vep_fields="$vep_fields,gnomAD_AF"
+	vep_fields="$vep_fields,COSMIC,COSMIC_CNT,COSMIC_LEGACY_ID"
 	
 	echo "Editing code here" >&2 && return 1
 	
