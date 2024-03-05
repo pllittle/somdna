@@ -481,8 +481,10 @@ run_VEP(){
 	cmd="$cmd --cache --dir_cache $cache_dir --cache_version $vep_rel"
 	[ "$cache_type" != "vep" ] && cmd="$cmd --$cache_type"
 	cmd="$cmd --assembly $genome --fasta $fasta_fn --force_overwrite"
-	cmd="$cmd --no_stats --domains --hgvs --af --af_gnomad --vcf"
+	cmd="$cmd --no_stats --domains --hgvs --af --vcf"
+	# --af_gnomad
 	cmd="$cmd --custom file=$cosmic_fn,short_name=COSMIC,format=vcf,type=exact,coords=0,fields=CNT%LEGACY_ID"
+	cmd="$cmd --custom file=$gnomad_fn,short_name=gnomAD,format=vcf,type=exact,coords=0,fields=AF"
 	cmd="$cmd --fields \"$vep_fields\""
 	eval $cmd >&2
 	status=$?
