@@ -3,21 +3,34 @@
 [ ! -z $srcPL_dnaCallAll ] && [ $srcPL_dnaCallAll -eq 1 ] && return 0
 [ -z "$git_dir" ] && git_dir=$(cd $(dirname $BASH_SOURCE)/../..; pwd)
 
+odir=$(pwd)
+
 for repo in baSHic; do
-	repo_dir=$git_dir/$repo
-	check_array $repo baSHic && tmp_url=https://github.com/pllittle/$repo.git
+	repo_dir="$git_dir/$repo"
+	check_array "$repo" baSHic && tmp_url=https://github.com/pllittle/$repo.git
 	
 	if [ ! -d "$repo_dir" ]; then
 		cd "$git_dir"
 		git clone "$tmp_url" >&2
+		[ $? -eq 0 ] && continue
+	else
+		cd "$repo_dir"
+		git pull >&2
+		[ $? -eq 0 ] && continue
 	fi
+	
+	echo -e "Error in clone/pull $repo" >&2
+	return 1
 	
 done
 
+cd "$odir"
+
 for fn in genomic; do
-	. $git_dir/somdna/scripts/$fn.sh
+	. "$git_dir/somdna/scripts/$fn.sh"
 	[ $? -eq 0 ] && continue
-	echo -e "Error src-ing $fn.sh" >&2 && return 1
+	echo -e "Error src-ing $fn.sh" >&2
+	return 1
 done
 
 run_strelka2_soma(){
