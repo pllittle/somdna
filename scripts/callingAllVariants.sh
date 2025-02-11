@@ -247,7 +247,8 @@ run_strelka2_germ(){
 	
 }
 down_cosmic(){
-	local genome version email pw url authstr downurl out_fn out_dir
+	local genome genome2 version email pw url hts_dir
+	local authstr downurl tmp_fn down_fn out_fn out_dir
 	local tmp_fn=~/.down
 	
 	while [ ! -z $1 ]; do
@@ -255,6 +256,10 @@ down_cosmic(){
 			-g | --genome )
 				shift
 				genome="$1"
+				;;
+			-h | --hts_dir )
+				shift
+				hts_dir="$1"
 				;;
 			-v | --version )
 				shift
@@ -268,37 +273,123 @@ down_cosmic(){
 		shift
 	done
 	
-	[ -z $genome ] 	&& echo "Add -g <genome>, like GRCh37 or GRCh38" >&2 && return 1
-	[ -z $version ] && echo "Add -v <version>, like 98 or 99" >&2 && return 1
-	[ -z $out_dir ] && echo "Add -o <out dir>" >&2 && return 1
-	new_mkdir $out_dir
-	cd $out_dir
+	[ -z "$genome" ] 	&& echo "Add -g <genome>, like GRCh37 or GRCh38" >&2 && return 1
+	[ -z "$hts_dir" ] && echo "Add -h <hts_dir>" >&2 && return 1
+	[ -z "$version" ] && echo "Add -v <version>, like 98/99/101" >&2 && return 1
+	[ -z "$out_dir" ] && echo "Add -o <out dir>" >&2 && return 1
+	new_mkdir "$out_dir"
 	
-	url=https://cancer.sanger.ac.uk/cosmic/file_download
-	url=$url/$genome/cosmic/v$version/VCF/CosmicCodingMuts.vcf.gz
-	# out_fn=`echo $url | sed 's|/|\n|g' | tail -n 1`
-	out_fn=CosmicCodingMuts_${genome}_v${version}.vcf.gz
+	# Check dependencies
+	for fn in bgzip tabix htsfile; do
+			[ ! -f "$hts_dir/bin/$fn" ] \
+				&& echo "Install htslib" >&2 && return 1
+			$hts_dir/bin/$fn --help > /dev/null
+			[ $? -eq 0 ] && continue
+			echo "Load htslib and dependencies" >&2 && return 1
+	done
 	
-	if [ ! -f $out_fn ]; then
-		make_menu -p "COSMIC/Sanger Email? (e.g. abc@gmail.com)"; read email
-		make_menu -p "COSMIC/Sanger Password?"; read -s pw
-		echo >&2
-		authstr=`echo -e "${email}:${pw}" | base64`
-		curl -H "Authorization: Basic ${authstr}" ${url} > $tmp_fn
-		downurl=`cat $tmp_fn | tail -n 1 | sed 's|"||g' \
-			| cut -d ':' --complement -f1 \
-			| sed 's|}$||g'`
-		rm $tmp_fn
-		echo $downurl > cosmic_downurl.txt
-		curl "${downurl}" -o $out_fn >&2
-		[ ! $? -eq 0 ] && echo -e "${red}Error in COSMIC download${NC}" >&2 && return 1
-		new_rm cosmic_downurl.txt
+	genome2=$(echo $genome | tr '[A-Z]' '[a-z]')
+	
+	# Get AuthString
+	make_menu -p "COSMIC/Sanger Email? (e.g. abc@gmail.com)"; read email
+	make_menu -p "COSMIC/Sanger Password?"; read -s pw
+	echo >&2
+	authstr=$(echo -e "${email}:${pw}" | base64)
+	
+	# Get coding mutations
+	url="https://cancer.sanger.ac.uk/api/mono/products/v1/downloads/scripted?path="
+	url="${url}${genome2}/cosmic/v${version}/VCF"
+	url="${url}/Cosmic_GenomeScreensMutant_Vcf_v${version}_${genome}.tar&bucket=downloads"
+	down_fn="$out_dir/Cosmic_GenomeScreensMutant_Vcf_v${version}_${genome}.tar"
+	out_fn="$out_dir/CosmicCodingMuts_${genome}_v${version}_canonical.vcf"
+	
+	if [ ! -f "$out_fn.gz" -o ! -f "$out_fn.gz.tbi" ]; then
+		echo "$(date): Prep coding muts ..." >&2
+		
+		if [ ! -f "$down_fn" ]; then
+			curl -H "Authorization: Basic ${authstr}" ${url} > "$tmp_fn"
+			downurl=$(cat "$tmp_fn" | tail -n 1 | sed 's|"||g' \
+				| cut -d ':' --complement -f1 | sed 's|}$||g')
+			rm "$tmp_fn"
+			
+			curl "${downurl}" -o "$down_fn" >&2
+			[ ! $? -eq 0 ] && echo -e "${red}Error in COSMIC download${NC}" >&2 && return 1
+		fi
+		
+		# Untar
+		gz_fn="$out_dir/Cosmic_GenomeScreensMutant_v${version}_${genome}.vcf.gz"
+		[ ! -f "$gz_fn" ] && tar -xf "$down_fn" -C "$out_dir/"
+		# rm "$down_fn"
+		
+		# Rename INFO FIELDs and subset canonical
+		zcat "$gz_fn" \
+			| awk 'BEGIN {OFS="\t"} {if ($0 ~ /^#/){print $0} else {split($8, info, ";"); for(i in info) if(info[i] == "IS_CANONICAL=y") {print $0}}}' \
+			| sed 's|GENOME_SCREEN_SAMPLE_COUNT|CNT|g' \
+			> "$out_fn"
+		rm "$gz_fn"
+		
+		echo -e "`date`: Running bgzip ..." >&2
+		$hts_dir/bin/bgzip -c "$out_fn" \
+			> "$out_fn.gz"
+		[ ! $? -eq 0 ] && echo "Error with bgzip" >&2 && return 1
+		rm "$out_fn"
+		
+		echo -e "`date`: Running tabix ..." >&2
+		$hts_dir/bin/tabix -p vcf "$out_fn.gz"
+		[ ! $? -eq 0 ] && echo "Error with tabix" >&2 && return 1
+		
 	fi
+	
+	# Get non-coding mutations
+	url="https://cancer.sanger.ac.uk/api/mono/products/v1/downloads/scripted?path="
+	url="${url}${genome2}/cosmic/v${version}/VCF"
+	url="${url}/Cosmic_NonCodingVariants_Vcf_v${version}_${genome}.tar&bucket=downloads"
+	down_fn="$out_dir/Cosmic_NonCodingVariants_Vcf_v${version}_${genome}.tar"
+	out_fn="$out_dir/CosmicNonCodingMuts_${genome}_v${version}_canonical.vcf"
+	
+	if [ ! -f "$out_fn.gz" -o ! -f "$out_fn.gz.tbi" ]; then
+		echo "$(date): Prep noncoding muts ..." >&2
+		
+		if [ ! -f "$down_fn" ]; then
+			curl -H "Authorization: Basic ${authstr}" ${url} > "$tmp_fn"
+			downurl=$(cat "$tmp_fn" | tail -n 1 | sed 's|"||g' \
+				| cut -d ':' --complement -f1 | sed 's|}$||g')
+			rm "$tmp_fn"
+			
+			curl "${downurl}" -o "$down_fn" >&2
+			[ ! $? -eq 0 ] && echo -e "${red}Error in COSMIC download${NC}" >&2 && return 1
+		fi
+		
+		# Untar
+		gz_fn="$out_dir/Cosmic_NonCodingVariants_v${version}_${genome}.vcf.gz"
+		[ ! -f "$gz_fn" ] && tar -xf "$down_fn" -C "$out_dir/"
+		# rm "$down_fn"
+		
+		# Rename INFO FIELDs and subset canonical
+		zcat "$gz_fn" \
+			| awk 'BEGIN {OFS="\t"} {if ($0 ~ /^#/){print $0} else {split($8, info, ";"); for(i in info) if(info[i] == "IS_CANONICAL=y") {print $0}}}' \
+			| sed 's|SAMPLE_COUNT|CNT|g' \
+			> "$out_fn"
+		rm "$gz_fn"
+		
+		echo -e "`date`: Running bgzip ..." >&2
+		$hts_dir/bin/bgzip -c "$out_fn" \
+			> "$out_fn.gz"
+		[ ! $? -eq 0 ] && echo "Error with bgzip" >&2 && return 1
+		rm "$out_fn"
+		
+		echo -e "`date`: Running tabix ..." >&2
+		$hts_dir/bin/tabix -p vcf "$out_fn.gz"
+		[ ! $? -eq 0 ] && echo "Error with tabix" >&2 && return 1
+		
+	fi
+	
+	return 0
 	
 }
 get_COSMIC_canonical(){
 	local genome version cosm_dir
-	local hts_dir cosmic_fn
+	local hts_dir cosmic_fn code_fn noncode_fn
 	
 	while [ ! -z $1 ]; do
 		case $1 in
@@ -322,13 +413,17 @@ get_COSMIC_canonical(){
 		shift
 	done
 	
-	[ -z $genome ] 		&& echo "Add -g <genome>, e.g. GRCh37/GRCh38" >&2 && return 1
-	[ -z $version ] 	&& echo "Add -v <version>, e.g. 94/95/99" >&2 && return 1
-	[ -z $hts_dir ] 	&& echo "Add -h <hts_dir>" >&2 && return 1
-	[ -z $cosm_dir ] 	&& echo "Add -c <COSMIC dir>" >&2 && return 1
+	[ -z $genome ] 			&& echo "Add -g <genome>, e.g. GRCh37/GRCh38" >&2 && return 1
+	[ -z $version ] 		&& echo "Add -v <version>, e.g. 94/95/99/101" >&2 && return 1
+	[ -z "$hts_dir" ] 	&& echo "Add -h <hts_dir>" >&2 && return 1
+	[ -z "$cosm_dir" ] 	&& echo "Add -c <COSMIC dir>" >&2 && return 1
 	
-	# down_cosmic -g $genome -v $version -o $cosm_dir
-	cosmic_fn=$cosm_dir/CosmicCodingMuts_${genome}_v${version}
+	down_cosmic -g $genome -v $version -o "$cosm_dir"
+	[ ! $? -eq 0 ] && echo "down_cosmic error" >&2 && return 1
+	
+	cosmic_fn="$cosm_dir/CosmicMuts_${genome}_v${version}_canonical"
+	code_fn="$cosm_dir/CosmicCodingMuts_${genome}_v${version}_canonical.vcf.gz"
+	noncode_fn="$cosm_dir/CosmicNonCodingMuts_${genome}_v${version}_canonical.vcf.gz"
 	
 	# Check dependencies
 	for fn in bgzip tabix htsfile; do
@@ -339,32 +434,33 @@ get_COSMIC_canonical(){
 			echo "Load htslib and dependencies" >&2 && return 1
 	done
 	
-	if [ ! -f ${cosmic_fn}_canonical.vcf.gz ] \
-		|| [ ! -f ${cosmic_fn}_canonical.vcf.gz.tbi ]; then
-		
-		[ ! -f $cosmic_fn.vcf.gz ] \
-			&& down_cosmic -g $genome -v $version -o $cosm_dir
-		
-		echo -e "`date`: Removing some rows" >&2
-		zgrep -v "GENE=.*_ENST[0-9]*;" $cosmic_fn.vcf.gz \
-			> ${cosmic_fn}_canonical.vcf
-		
-		echo -e "`date`: Running bgzip ..." >&2
-		$hts_dir/bin/bgzip -c ${cosmic_fn}_canonical.vcf \
-			> ${cosmic_fn}_canonical.vcf.gz
-		[ ! $? -eq 0 ] && echo "Error with bgzip" >&2 && return 1
-		
-		echo -e "`date`: Running tabix ..." >&2
-		$hts_dir/bin/tabix -p vcf ${cosmic_fn}_canonical.vcf.gz
-		[ ! $? -eq 0 ] && echo "Error with tabix" >&2 && return 1
-		new_rm ${cosmic_fn}_canonical.vcf $cosmic_fn.vcf.gz
-		
-		echo -e "`date`: Finished downloading/processing COSMIC file for VEP" >&2
-		
-	else
-		echo -e "`date`: CosmicCodingMuts_${genome}_v${version} file already available ^_^" >&2
-		
+	if [ -f "${cosmic_fn}.vcf.gz" ] && [ -f "${cosmic_fn}.vcf.gz.tbi" ]; then
+		echo -e "`date`: ${cosmic_fn}_canonical.vcf.gz already prepared ^_^" >&2
+		return 0
 	fi
+	
+	new_rm "${cosmic_fn}.vcf" "${cosmic_fn}.vcf.gz"
+	
+	echo -e "`date`: Combine coding and noncoding vcfs ..." >&2
+	zcat "$code_fn" > "${cosmic_fn}.vcf"
+	zgrep -v "^#" "$noncode_fn" >> "${cosmic_fn}.vcf"
+	
+	echo -e "`date`: Sort combined vcf ..." >&2
+	awk '/^#/ { print } !/^#/ { print }' "${cosmic_fn}.vcf" \
+		| sort -k1,1 -k2,2n > "${cosmic_fn}_sorted.vcf"
+	mv "${cosmic_fn}_sorted.vcf" "${cosmic_fn}.vcf"
+	
+	echo -e "`date`: Running bgzip ..." >&2
+	$hts_dir/bin/bgzip -c "${cosmic_fn}.vcf" \
+		> "${cosmic_fn}.vcf.gz"
+	[ ! $? -eq 0 ] && echo "Error with bgzip" >&2 && return 1
+	new_rm "${cosmic_fn}.vcf"
+	
+	echo -e "`date`: Running tabix ..." >&2
+	$hts_dir/bin/tabix -p vcf "${cosmic_fn}.vcf.gz"
+	[ ! $? -eq 0 ] && echo "Error with tabix" >&2 && return 1
+	
+	echo -e "`date`: Finished processing COSMIC file for VEP" >&2
 	
 	return 0
 }
