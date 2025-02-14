@@ -26,6 +26,13 @@ done
 
 cd "$odir"
 
+for fn in base; do
+	. "$git_dir/baSHic/scripts/$fn.sh"
+	[ $? -eq 0 ] && continue
+	echo -e "Error src-ing baSHic's $fn.sh" >&2
+	return 1
+done
+
 for fn in genomic; do
 	. "$git_dir/somdna/scripts/$fn.sh"
 	[ $? -eq 0 ] && continue
