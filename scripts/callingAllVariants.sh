@@ -425,7 +425,7 @@ get_COSMIC_canonical(){
 	[ -z "$hts_dir" ] 	&& echo "Add -h <hts_dir, the ../../ directory of htsfile>" >&2 && return 1
 	[ -z "$cosm_dir" ] 	&& echo "Add -c <COSMIC dir>" >&2 && return 1
 	
-	down_cosmic -g $genome -v $version -o "$cosm_dir"
+	down_cosmic -g $genome -v $version -h "$hts_dir" -o "$cosm_dir"
 	[ ! $? -eq 0 ] && echo "down_cosmic error" >&2 && return 1
 	
 	cosmic_fn="$cosm_dir/CosmicMuts_${genome}_v${version}_canonical"
