@@ -253,6 +253,17 @@ run_strelka2_germ(){
 	return 0
 	
 }
+auth_cosmic(){
+	local email pw authstr
+	
+	# Get AuthString
+	make_menu -p "COSMIC/Sanger Email? (e.g. abc@gmail.com)"; read email
+	make_menu -p "COSMIC/Sanger Password?"; read -s pw
+	echo >&2
+	authstr=$(echo -e "${email}:${pw}" | base64)
+	
+	echo "$authstr"
+}
 down_cosmic(){
 	local genome genome2 version email pw url hts_dir
 	local authstr downurl tmp_fn down_fn out_fn out_dir
@@ -297,12 +308,6 @@ down_cosmic(){
 	
 	genome2=$(echo $genome | tr '[A-Z]' '[a-z]')
 	
-	# Get AuthString
-	make_menu -p "COSMIC/Sanger Email? (e.g. abc@gmail.com)"; read email
-	make_menu -p "COSMIC/Sanger Password?"; read -s pw
-	echo >&2
-	authstr=$(echo -e "${email}:${pw}" | base64)
-	
 	# Get coding mutations
 	url="https://cancer.sanger.ac.uk/api/mono/products/v1/downloads/scripted?path="
 	url="${url}${genome2}/cosmic/v${version}/VCF"
@@ -311,6 +316,9 @@ down_cosmic(){
 	out_fn="$out_dir/CosmicCodingMuts_${genome}_v${version}_canonical.vcf"
 	
 	if [ ! -f "$out_fn.gz" -o ! -f "$out_fn.gz.tbi" ]; then
+		# Get AuthString
+		[ -z "$authstr" ] && authstr=$(auth_cosmic)
+		
 		echo "$(date): Prep coding muts ..." >&2
 		
 		if [ ! -f "$down_fn" ]; then
@@ -355,6 +363,9 @@ down_cosmic(){
 	out_fn="$out_dir/CosmicNonCodingMuts_${genome}_v${version}_canonical.vcf"
 	
 	if [ ! -f "$out_fn.gz" -o ! -f "$out_fn.gz.tbi" ]; then
+		# Get AuthString
+		[ -z "$authstr" ] && authstr=$(auth_cosmic)
+		
 		echo "$(date): Prep noncoding muts ..." >&2
 		
 		if [ ! -f "$down_fn" ]; then
