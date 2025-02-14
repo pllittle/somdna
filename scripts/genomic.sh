@@ -1,12 +1,13 @@
 #!/bin/sh
 
-[ ! -z $srcPL_genomic ] && [ $srcPL_genomic -eq 1 ] \
-	&& return 0
-
+[ ! -z $srcPL_genomic ] && [ $srcPL_genomic -eq 1 ] && return 0
 [ -z "$git_dir" ] && git_dir=$(cd $(dirname $BASH_SOURCE)/../..; pwd)
 
 for fn in install linux_perl; do
-	. $git_dir/baSHic/scripts/$fn.sh
+	. "$git_dir/baSHic/scripts/$fn.sh"
+	[ $? -eq 0 ] && continue
+	echo -e "Error src-ing baSHic's $fn.sh" >&2
+	return 1
 done
 
 # Installation functions
