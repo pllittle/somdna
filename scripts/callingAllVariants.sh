@@ -422,7 +422,7 @@ get_COSMIC_canonical(){
 	
 	[ -z $genome ] 			&& echo "Add -g <genome>, e.g. GRCh37/GRCh38" >&2 && return 1
 	[ -z $version ] 		&& echo "Add -v <version>, e.g. 94/95/99/101" >&2 && return 1
-	[ -z "$hts_dir" ] 	&& echo "Add -h <hts_dir>" >&2 && return 1
+	[ -z "$hts_dir" ] 	&& echo "Add -h <hts_dir, the ../../ directory of htsfile>" >&2 && return 1
 	[ -z "$cosm_dir" ] 	&& echo "Add -c <COSMIC dir>" >&2 && return 1
 	
 	down_cosmic -g $genome -v $version -o "$cosm_dir"
