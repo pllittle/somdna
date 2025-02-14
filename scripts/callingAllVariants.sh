@@ -7,7 +7,7 @@ odir=$(pwd)
 
 for repo in baSHic; do
 	repo_dir="$git_dir/$repo"
-	check_array "$repo" baSHic && tmp_url=https://github.com/pllittle/$repo.git
+	tmp_url=https://github.com/pllittle/$repo.git
 	
 	if [ ! -d "$repo_dir" ]; then
 		cd "$git_dir"
