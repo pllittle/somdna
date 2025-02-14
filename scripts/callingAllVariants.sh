@@ -281,7 +281,7 @@ down_cosmic(){
 	done
 	
 	[ -z "$genome" ] 	&& echo "Add -g <genome>, like GRCh37 or GRCh38" >&2 && return 1
-	[ -z "$hts_dir" ] && echo "Add -h <hts_dir>" >&2 && return 1
+	[ -z "$hts_dir" ] && echo "Add -h <hts_dir, the ../../ directory of htsfile>" >&2 && return 1
 	[ -z "$version" ] && echo "Add -v <version>, like 98/99/101" >&2 && return 1
 	[ -z "$out_dir" ] && echo "Add -o <out dir>" >&2 && return 1
 	new_mkdir "$out_dir"
@@ -326,7 +326,7 @@ down_cosmic(){
 		# Untar
 		gz_fn="$out_dir/Cosmic_GenomeScreensMutant_v${version}_${genome}.vcf.gz"
 		[ ! -f "$gz_fn" ] && tar -xf "$down_fn" -C "$out_dir/"
-		# rm "$down_fn"
+		rm "$down_fn"
 		
 		# Rename INFO FIELDs and subset canonical
 		zcat "$gz_fn" \
@@ -370,7 +370,7 @@ down_cosmic(){
 		# Untar
 		gz_fn="$out_dir/Cosmic_NonCodingVariants_v${version}_${genome}.vcf.gz"
 		[ ! -f "$gz_fn" ] && tar -xf "$down_fn" -C "$out_dir/"
-		# rm "$down_fn"
+		rm "$down_fn"
 		
 		# Rename INFO FIELDs and subset canonical
 		zcat "$gz_fn" \
