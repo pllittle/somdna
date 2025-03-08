@@ -482,6 +482,70 @@ get_COSMIC_canonical(){
 	
 	return 0
 }
+get_gnomad(){
+	local url genome out_dir zip_fn out_fn
+	local version odir
+	
+	while [ ! -z $1 ]; do
+		case $1 in
+			-g | --genome )
+				shift
+				genome="$1"
+				;;
+			-o | --out_dir )
+				shift
+				out_dir="$1"
+				;;
+			-v | --version )
+				shift
+				version="$1"
+				;;
+		esac
+		shift
+	done
+	
+	[ -z $genome ] && echo "Add -g <genome>, e.g. GRCh37/GRCh38" >&2 && return 1
+	check_array "$genome" GRCh37 GRCh38
+	[ ! $? -eq 0 ] && echo "Error: genome incorrect" >&2 && return 1
+	[ "$genome" == "GRCh38" ] && echo "Error: code not ready for GRCh38 yet" >&2 && return 1
+	
+	[ -z "$version" ] && echo "Add -v <version, 2.1 or 3.0.1>" >&2 && return 1
+	check_array "$version" "2.1" "3.0.1"
+	[ ! $? -eq 0 ] && echo "Error: version incorrect" >&2 && return 1
+	
+	new_mkdir "$out_dir"
+	
+	url=https://storage.googleapis.com/gcp-public-data--gnomad/release
+	
+	if [ "$version" == "2.1" ]; then
+		url=$url/2.1/coverage/genomes/gnomad.genomes.coverage.summary.tsv.bgz
+	elif [ "$version" == "3.0.1" ]; then
+		url=$url/3.0.1/coverage/genomes/gnomad.genomes.r3.0.1.coverage.summary.tsv.bgz
+	fi
+	
+	zip_fn="$out_dir/gnomad.genomes.coverage.summary.tsv.bgz"
+	out_fn="$out_dir/gnomad.genomes.tabbed.tsv.gz"
+	
+	odir=$(pwd)
+	cd "$out_dir"
+	
+	if [ ! -f "$zip_fn" ]; then
+		wget -O "$zip_fn" $url --no-check-certificate
+		[ ! $? -eq 0 ] && new_rm "$zip_fn" \
+			&& echo "Error in download, try again" >&2 \
+			&& cd "$odir" && return 1
+	fi
+	
+	if [ ! -f "$out_fn" ]; then
+		gunzip -c "$zip_fn" | sed '1s/.*/#&/' \
+			| bgzip > "$out_fn" && tabix -s 1 -b 2 -e 2 "$out_fn"
+		[ ! $? -eq 0 ] && echo "Some error" >&2 && cd "$odir" && return 1
+	fi
+	
+	cd "$odir"
+	return 0
+	
+}
 run_VEP(){
 	local fasta_fn vep_dir genome status vep_rel cmd
 	local input_fn output_fn vep_fields cosmic_fn ncores
