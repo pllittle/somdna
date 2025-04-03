@@ -14,6 +14,7 @@ for repo in baSHic; do
 		git clone "$tmp_url" >&2
 		[ $? -eq 0 ] && continue
 	else
+		[ -f "$git_dir/$repo/.git/ORIG_HEAD.lock" ] && continue
 		cd "$repo_dir"
 		git pull >&2
 		[ $? -eq 0 ] && continue
